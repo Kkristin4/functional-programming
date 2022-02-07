@@ -1,0 +1,67 @@
+import string;
+
+main() {
+    n: int = 9;
+    println("recursive:");
+    printArray(map(fib(n), i2s));
+
+    println("with tail recirsion:");
+    printArray(map(tairr(n, [], 0), i2s));
+
+    println("with references to the array:");
+    printArray(map(references(n), i2s));
+    quit(0);
+    
+}
+
+fib(n: int) -> [int]
+{   r: [int] = [0];
+    if(n <= 1) 
+    {  if(n==0) {r}
+        else {concat(r, [1])}
+    }
+    else
+    {   q:[int] = fib(n-1);
+        concat(q, [q[n-1] + q[n-2]])
+        };
+}
+
+printArray(a: [string]) -> void
+{
+    println(strGlue(a, ", "));
+}
+
+tairr (n: int, array: [int], i: int) -> [int]
+{
+    if(i > n) array
+    else{
+        if (i <= 1){ 
+            if (i == 0) tairr(n, [0], i + 1)
+            else tairr(n, [0, 1], i + 1)
+        }
+        else {
+            number: int = array[i-2] + array[i-1];
+            tairr(n, concat(array, [number]), i + 1)
+        }
+    }   
+}
+
+references(n: int) -> [int]
+{
+    f: [int] = [0];
+    r: ref [int] = ref f;
+
+    if (n <= 1){
+        if (n == 0) {
+            f
+        }
+        else {concat(f, [1])
+        }
+    }
+    else
+    {   refArrayPush(r, 1);
+        ^r;
+        fori(2, n, \i -> refArrayPush(r, ^r[i-2] + ^r[i-1]));
+        ^r
+    }
+}

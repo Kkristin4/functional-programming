@@ -1,0 +1,12 @@
+import string;
+
+main(){
+    a: [int]  = [1, 2, 3, 467, 5, 6];
+    printArray(map(a, i2s));
+    quit(0);
+}
+
+printArray(a: [string]) -> void
+{
+    println(strGlue(a, ", "));
+}

@@ -1,0 +1,77 @@
+import string;
+import lingo/pegcode/driver;
+
+Expr ::= IntConst, Mul, Sum; 
+IntConst(value:int);
+Mul(left: Expr, right: Expr); 
+Sum(left: Expr, right: Expr);
+
+RPNexpr ::= RPNsum, RPNmul, IntConst;
+RPNmul();
+RPNsum();
+
+arithGrammarOp = compilePegGrammar("#include C:\VSC\gram6.lingo");
+
+Calc(e: Expr)->int
+{
+  switch(e)
+  {
+      IntConst(c): c;
+      Mul(l, r): Calc(l)*Calc(r);
+      Sum(l, r): Calc(l)+Calc(r);
+  }
+};
+
+
+Parse(source:string)->[RPNexpr] {
+  parsic(arithGrammarOp, source, defaultPegActions);
+};
+
+Print(e: Expr) -> string {
+  switch (e){
+      IntConst(val): { i2s(val) }
+        Sum(f, s):  "(" + Print(f) + "+" + Print(s) + ")"; 
+        Mul(f, s):  "(" + Print(f) + "*" + Print(s) + ")" ;
+  }
+}
+
+Expression(arr: [RPNexpr]) -> Expr {
+    expressions = ref arr;
+    arrExps = fold(^expressions,ref [], \ expArr ,exp -> {
+        switch (exp : RPNexpr) {
+             IntConst(value): Push(expArr, IntConst(value));
+             RPNmul(): Push(expArr,Mul(Pop(expArr),Pop(expArr)));
+             RPNsum(): Push(expArr,Sum(Pop(expArr), Pop(expArr)));
+        }
+    });
+
+    ^arrExps[0];
+
+}
+
+Pop(arr: ref [Expr]) -> Expr {
+    expr = ^arr[length(^arr) - 1];
+    arr := subrange(^arr,0, length(^arr) - 1);
+    expr;
+}
+
+Push(arr: ref [Expr], elem) -> ref [Expr] {
+    refArrayPush(arr,elem);
+    arr;
+    
+}
+
+
+main()
+{
+  rpn =  ["1 2 + 5 *"];
+  RPNexpressions = map(rpn, Parse);
+  expressions = map(RPNexpressions , Expression);
+  text = map(expressions, Print);
+  results = map(expressions, Calc);
+  println(rpn);
+  println(text);
+  println(expressions);
+  println(results);
+  quit(0);
+}

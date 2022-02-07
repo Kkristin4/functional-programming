@@ -1,0 +1,221 @@
+import string;
+import lingo/pegcode/driver;
+import ds/tree;
+
+Expr ::= Mul, Add, Div, IntConst, Sub, Neg, Fra, Var; 
+Mul(left: Expr, right: Expr); 
+Add(left: Expr, right: Expr);
+Div(left: Expr, right: Expr); 
+Sub(left: Expr, right: Expr);
+Neg(left: Expr );
+Fra(left: Expr, right: Expr);       //same as division just used for clarity
+IntConst(value: int );
+Var(value: string);
+
+arithGrammarOp = compilePegGrammar("#include C:\VSC\gram7.lingo");
+
+Calc(e: Expr)-> Fra
+{
+  switch(e){
+    IntConst(l): Fra(IntConst(l), IntConst(1));
+    Mul(l, r):{
+        first = Calc(l);
+        second = Calc(r);
+        Fra(Mul(first.left, second.left), Mul(first.right, second.right));
+    }
+
+    Add(l, r):{
+        first = Calc(l);
+        second = Calc(r);
+        Fra(Add(Mul(first.left, second.right),  Mul(first.right, second.left)), Mul(first.right,  second.right ));
+    }
+
+    Div(l, r):{
+        first = Calc(l);
+        second = Calc(r);
+        Fra(Mul(first.left, second.right) , Mul(first.right, second.left) );
+    }
+
+   Sub(l, r):{
+        first = Calc(l);
+        second = Calc(r);
+        Fra(Sub(Mul(first.left ,  second.right), Mul(first.right, second.left)), Mul(first.right,  second.right)) ;}
+  
+  Neg(l):{
+    first = Calc(l);
+    Fra(Mul(first.left,  IntConst(-1)), first.right);
+  }
+
+  Fra(l, r): Fra(l, r);
+  Var(c): {
+      Fra(Var(c), IntConst(1));
+    }
+  }}
+
+Print(e: Expr) -> string
+{
+  switch(e)
+  {
+      IntConst(c): i2s(c);
+      Mul(l, r): ""+Print(l)+"*"+Print(r)+"";
+      Add(l, r): "("+Print(l)+"+"+Print(r)+")";
+      Div(l, r): "("+Print(l)+"/"+Print(r)+")";
+      Sub(l, r): "("+Print(l)+"-"+Print(r)+")";
+      Neg(l): "( -"+Print(l) + ")";
+      Fra(l, r): Print(l) + "/"+ Print(r);
+      Var(c): c;
+  }
+};
+
+Parse(source:string)->Expr {
+  parsic(arithGrammarOp, source, defaultPegActions);
+};
+
+
+simplification(e: Expr) -> Expr {
+    switch (e) {
+        Add(l, r): {
+            first = simplification(l);
+            second = simplification(r); 
+            switch (first) {
+                IntConst(c): {
+                    if (c == 0) 
+                          second 
+                    else 
+                      switch (second) {
+                        IntConst(z):  IntConst(c + z);
+                        default:  Add(first, second);
+                      }
+                }
+            
+                default: {
+                    switch (second) {
+                        IntConst(c): {
+                            if (c == 0)
+                               first 
+                            else  Add(first, second)    
+                        }
+                        default: Add(first, second);
+                    }
+                }
+            }
+        }
+        Sub(l,r): {
+            if (l == r)  
+                IntConst(0)
+            else {
+                first = simplification(l);
+                second = simplification(r);
+                if (first == second)  
+                    IntConst(0) 
+                else
+                switch (first) {
+                    IntConst(c): {
+                        switch (second) {
+                            IntConst(z): IntConst(c-z);
+                            default: Sub(first, second);
+                        }
+                    }
+                
+                    default: {
+                        switch (second) {
+                            IntConst(c): {
+                                if (c == 0)  
+                                    first 
+                                else Sub(first, second)   
+                            }
+                            default: Sub(first, second);
+                        }
+                    }
+                }
+            }
+        }
+        Div(l, r): {
+            if (l == r) 
+                IntConst(1)
+            else{
+                first = simplification(l);
+                second = simplification(r);
+                if (first == second)  
+                    IntConst(1)
+                else
+                switch (first) {
+                    IntConst(c): {
+                        if (c == 0)  
+                            IntConst(0)
+                        else {
+                            switch (second) {
+                                IntConst(z): {  
+                                    if (z == 1) 
+                                         first 
+                                    else {
+                                        nod = gcd(c, z);
+                                        Div(IntConst(c / nod), IntConst(z / nod));
+                                    }
+                                }
+                                default: Div(first, second);
+                            }
+                        }
+                    }
+                
+                    default: Div(first, second); 
+                }
+            }
+        }
+        
+        Mul(l,r): {
+            first = simplification(l);
+            second = simplification(r);
+            switch (first) {
+                IntConst(c): {
+                    if (c == 1) 
+                          second
+                    else if (c == 0) 
+                        IntConst(0)
+                    else{
+                        switch(second){
+                            IntConst(z):{
+                                if (z == 1) 
+                                    first
+                                else if (z == 0) 
+                                    IntConst(0)
+                                    else IntConst(c * z);
+                            }
+                            default: Mul(first, second);
+                        }
+                    }
+                }
+                default: 
+                switch (second) {
+                    IntConst(c): {
+                        if (c == 0)
+                            IntConst(0)
+                        else if (c == 1)
+                            first
+                            else Mul(first, second);
+                    }
+                    default: Mul(first, second);
+                }
+            }
+        }
+        Var(var): Var(var);
+        IntConst(c): IntConst(c);
+        Neg(l): Neg(simplification(l));
+        Fra(l, r): Fra(simplification(l), simplification(r));       
+    }
+}
+
+main()
+{
+  sources = ["x * 1 / 4 + 5 / 7", " -3 * 2"];
+  expressions:[Expr] = mapi(sources, (\i, value -> Parse(value)));
+  result = map(expressions, Calc); //make rational function
+  simplified = map(result, simplification);
+  text = map(simplified, Print);
+  println(expressions);
+  println(result);
+  println(simplified);
+  println(text);
+  
+  quit(0);
+}

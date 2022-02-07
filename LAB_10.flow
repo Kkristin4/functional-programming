@@ -1,0 +1,247 @@
+import string;
+import lingo/pegcode/driver;
+import ds/tree;
+
+Expr ::= Mul, Add, Div, IntConst, Sub, Neg, Fra, Var; 
+Mul(left: Expr, right: Expr); 
+Add(left: Expr, right: Expr);
+Div(left: Expr, right: Expr); 
+Sub(left: Expr, right: Expr);
+Neg(left: Expr );
+Fra(left: int, right: int);
+IntConst(value: int );
+Var(value: string);
+
+MatchResult(result : bool, context : Tree<string, Expr>);
+FromTo(from : Expr, to : Expr);
+examples = [
+    ParsExmp("x + 0", "x"),
+    ParsExmp("x * 1", "x"),
+    ParsExmp("x - x", "0"),
+    ParsExmp("0 * x", "0"),
+    ParsExmp("x * 0", "0"), 
+    ParsExmp("(x * y) + (x * z)", "x * (z + y)"),
+    ParsExmp("x + x", "2 * x"),
+    //ParsExmp("x * x - y * y", "(x - y) * (x + y)"),
+    ParsExmp("x * x + 2 * x * y + y * y", "(x + y) * (x + y)"),
+    ParsExmp("x * x +  x * 2 * y + y * y", "(x + y) * (x + y)"),
+    ParsExmp("x * x + 2 * x * y + y * y", "(x + y) * (x + y)"),
+    ParsExmp("x * x + 2 * x * y + y * y", "(x + y) * (x + y)")
+    
+];
+
+arithGrammarOp = compilePegGrammar("#include C:\VSC\gram7.lingo");
+
+ParsExmp(from : string, to : string) -> FromTo {
+    FromTo(Parse(from), Parse(to));
+}
+Calc(e: Expr, tr: Tree<string, Fra>)-> Maybe<Fra>
+{
+  switch(e){
+    IntConst(l): Some(Fra(l, 1));
+    Mul(l, r):{
+      maybeBind2(
+          \first, second -> {
+              Some( Fra(first.left * second.left, first.right*second.right ));
+           }
+      )(Calc(l, tr), Calc(r, tr))
+   }
+    Add(l, r): {
+      maybeBind2(
+          \first, second -> {
+              Some(Fra(first.left * second.right + first.right * second.left, first.right * second.right ));
+          }
+      )(Calc(l, tr), Calc(r, tr))
+   }
+    Div(l, r):{
+      maybeBind2(
+          \first, second -> {
+              if ((second.left == 0) || (second.right == 0)) 
+                  None()
+              else 
+                  Some( Fra(first.left*second.right , first.right*second.left) );
+            }
+      )(Calc(l, tr), Calc(r, tr))
+   }
+   Sub(l, r):{
+      maybeBind2(
+          \first, second -> {
+              Some( Fra(first.left * second.right - first.right * second.left, first.right * second.right) );
+              }
+      )(Calc(l, tr), Calc(r, tr))
+   }
+  Neg(l):{
+    switch (Calc(l, tr)){
+      Some(val):  Some(Fra(val.left * (-1), val.right));
+      None():None();
+    }
+  }
+  Fra(l, r): None(); 
+  Var(c): {
+    switch (lookupTree(tr, c)) {
+      Some(val): Some(val);
+      None(): None(); 
+        }} ;
+}}
+
+
+Parse(source:string)->Expr {
+  parsic(arithGrammarOp, source, defaultPegActions);
+};
+
+Change(e : Expr, context : Tree<string, Expr>) -> Expr {
+    switch(e) {
+        IntConst(c) : e;
+        Var(c) : {
+            switch(lookupTree(context, c)) {
+                None() : e;
+                Some(val) : val;
+            }
+        }
+        Mul(l, r) : Mul(Change(l, context), Change(r, context));
+        Add(l, r) : Add(Change(l, context), Change(r, context));
+        Div(l, r) : Div(Change(l, context), Change(r, context));
+        Sub(l, r) : Sub(Change(l, context), Change(r, context));
+        Neg(l): Neg(l);
+        Fra(l, r): Fra(l,r );
+    }
+}
+
+MatchCheck (e1 : Expr, e2 : Expr, context : Tree<string, Expr>) -> MatchResult {
+    switch (e1) {
+        IntConst(c) : {
+            switch (e2) {
+                IntConst(z) : MatchResult(c == z, context);
+                default : MatchResult(false, context);
+            }
+        }
+        Var(c) : {
+            switch(lookupTree(context, c)) {
+                None() : {
+                    MatchResult(true, setTree(context, c, e2));
+                }
+                Some(val) : {
+                    MatchResult(val == e2, context);
+                }
+            }
+        }
+        Mul(l, r) : {
+            switch (e2) {
+                Mul(f, s) : {
+                    res = MatchCheck(l, f, context);
+                    if (res.result == false) res
+                    else MatchCheck(r, s, res.context);
+                }
+                default : MatchResult(false, context);
+            }
+        }
+        Add(l, r) : {
+            switch (e2) {
+                Add(f, s) : {
+                    res = MatchCheck(l, f, context);
+                    if (res.result == false) res
+                    else MatchCheck(r, s, res.context);
+                }
+                default : MatchResult(false, context);
+            }
+        }
+        Div(l, r) : {
+            switch (e2) {
+                Div(f, s) : {
+                    res = MatchCheck(l, f, context);
+                    if (res.result == false) res
+                    else MatchCheck(r, s, res.context);
+                }
+                default : MatchResult(false, context);
+            }
+        }
+        Sub(l, r) : {
+            switch (e2) {
+                Sub(f, s) : {
+                    res = MatchCheck(l, f, context);
+                    if (res.result == false) res
+                    else MatchCheck(r, s, res.context);
+                }
+                default : MatchResult(false, context);
+            }
+        }
+        Neg(l) : {
+             MatchResult(false, context)
+        }
+        Fra(l, r):{
+             MatchResult(false, context)
+        }
+    }
+}
+
+FindChange(e: Expr, t: FromTo)-> Expr{
+    matchResult = MatchCheck(t.from, e, makeTree());
+    if (matchResult.result == false)
+        e
+    else
+        Change(t.to, matchResult.context);
+}
+
+Modification(e: Expr)-> Expr{
+    NewExpr = fold(examples, e, \exp, t -> {
+        FindChange(exp, t);
+    });
+    switch(NewExpr){
+        IntConst(c): NewExpr;
+        Var(c): NewExpr;
+        Mul(l, r): Mul(Modification(l), Modification(r));
+        Add(l, r): Add(Modification(l), Modification(r));
+        Div(l, r): Div(Modification(l), Modification(r));
+        Sub(l, r): Sub(Modification(l), Modification(r));
+        Neg(l): Neg(Modification(l));
+        Fra(l, r): NewExpr;         //occurs only during calculation, but without Fra switch not worked
+    }
+}
+
+Simplification(e: Expr)-> Expr{
+    simplistic = Modification(e);
+    if (simplistic == e)
+        e
+    else
+        Simplification(simplistic);
+}
+
+Print(e: Expr)->string {
+    switch (e) {
+        IntConst(c): i2s(c);
+        Var(c): c ;
+        Add(l, r): ( "(" + Print(l) + "+" + Print(r) + ")");
+        Mul(l, r): ( Print(l) + "*" + Print(r));
+        Div(l, r): ( Print(l) + "/" + Print(r));
+        Sub(l, r): ( "(" + Print(l) + "-" + Print(r) + ")");
+        Fra(l, r): ( i2s(l) + "/" + i2s(r));
+        Neg(c): ( "-" + Print(c));
+
+    }
+}
+
+Number(e: Maybe<Fra>) -> string
+{
+    switch (e) {
+        None(): "Check var or division by zero";
+        Some(c): Print(c);
+    }
+}
+
+main()
+{
+  vars = [Pair("x", Fra(1, 1)), Pair("y", Fra(2,1)), Pair("z", Fra(3,1))];
+  tr =  setTreeValues(TreeEmpty(), vars);
+  sources = ["-(x * x + 2 * x * y + y * y)"];
+  expressions:[Expr] = mapi(sources, (\i, value -> Parse(value)));
+  simplified = map(expressions, Simplification);
+  text = map(simplified, Print);
+  results = map(simplified, \e->Calc(e, tr));
+  answer  = map(results, Number);
+  println(expressions);
+  println(simplified);
+  println(text);
+  println(results);
+  println(answer);
+  quit(0);
+}

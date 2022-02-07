@@ -1,0 +1,5 @@
+expr = ( sum | mul | int)*;
+sum = "+" ws {RPNsum()};
+mul = "*" ws {RPNmul()};
+int = ('0'-'9')+ $d ws {IntConst(s2i($d))};
+ws = (' '|'\r'|'\n'|'\t')*;

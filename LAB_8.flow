@@ -1,0 +1,288 @@
+import string;
+import lingo/pegcode/driver;
+import ds/tree;
+
+Expr ::= Mul, Add, Div, IntConst, Sub, Neg, Fra, Var; 
+Mul(left: Expr, right: Expr); 
+Add(left: Expr, right: Expr);
+Div(left: Expr, right: Expr); 
+Sub(left: Expr, right: Expr);
+Neg(left: Expr );
+Fra(left: int, right: int);
+IntConst(value: int );
+Var(value: string);
+
+arithGrammarOp = compilePegGrammar("#include C:\VSC\gram7.lingo");
+
+Calc(e: Expr, tr: Tree<string, Fra>)-> Maybe<Fra>
+{
+  switch(e){
+    IntConst(l): Some(Fra(l, 1));
+    Mul(l, r):{
+      switch (Calc(l, tr)) {
+        Some(first): {
+          switch (Calc(r, tr)) {
+            Some(second): {
+              Some( Fra(first.left * second.left, first.right*second.right ));}
+            None(): None();
+            }}
+        None(): None();
+    }}
+
+    Add(l, r):{
+      switch (Calc(l, tr)) {
+        Some(first): {
+          switch (Calc(r, tr)) {
+            Some(second): {
+              Some(Fra(first.left * second.right + first.right * second.left, first.right * second.right ));}
+            None(): None();
+            }}
+        None(): None();
+    }}
+
+    Div(l, r):{
+      switch (Calc(l, tr)) {
+        Some(first): {
+          switch (Calc(r, tr)) {
+            Some(second): {
+              if ((second.left == 0) || (second.right == 0)) 
+                  None()
+              else 
+                  Some( Fra(first.left*second.right , first.right*second.left) );}
+            None(): None();
+            }}
+        None(): None();
+    }}
+
+   Sub(l, r):{
+      switch (Calc(l, tr)) {
+        Some(first): {
+          switch (Calc(r, tr)) {
+            Some(second): {
+              Some( Fra(first.left * second.right - first.right * second.left, first.right * second.right) );}
+            None(): None();
+            }}
+        None(): None();
+    }}
+  
+  Neg(l):{
+    switch (Calc(l, tr)){
+      Some(val):  Some(Fra(val.left * (-1), val.right));
+      None():None();
+    }
+  }
+
+  Fra(l, r): None();
+    
+  Var(c): {
+    switch (lookupTree(tr, c)) {
+      Some(val): Some(val);
+      None(): None(); 
+        }} ;
+
+}}
+
+
+Print(e:Expr) -> string
+{
+  switch(e)
+  {
+      IntConst(c): i2s(c);
+      Mul(l, r): "("+Print(l)+"*"+Print(r)+")";
+      Add(l, r): "("+Print(l)+"+"+Print(r)+")";
+      Div(l, r): "("+Print(l)+"/"+Print(r)+")";
+      Sub(l, r): "("+Print(l)+"-"+Print(r)+")";
+      Neg(l): "( -"+Print(l) + ")";
+      Fra(l, r): i2s(l) + "/"+ i2s(r);
+      Var(c): c;
+  }
+};
+
+Parse(source:string)->Expr {
+  parsic(arithGrammarOp, source, defaultPegActions);
+};
+
+Number(ex: Expr, tr: Tree<string, Fra>) -> string
+{
+  switch(Calc(ex, tr)){
+    Some(val): {
+      if (val.right == 1)
+        {i2s(val.left)}
+      else {
+       " "+ i2s(val.left) + "/" + i2s(val.right) + " "
+      }
+          }
+    None(): "Check var or divide by zero"
+  }
+}
+
+dif(e: Expr, tree: Tree<string, Fra>, difVar: string)-> Expr{
+    switch (e) {
+        IntConst(c): IntConst(0);
+        Var(value):{
+            if (value == difVar) {IntConst(1)}
+            else {IntConst(0)}
+        }
+        Add(l, r):{
+            Add(dif(l, tree, difVar), dif(r, tree, difVar));
+        }
+        Sub(l, r):{
+            Sub(dif(l, tree, difVar), dif(r, tree, difVar));
+        }
+        Mul(l, r):{
+            Add(Mul(dif(l, tree, difVar), r), Mul(dif(r, tree, difVar), l));
+        }
+        Div(l, r):{
+            Div(Sub(Mul(dif(l, tree, difVar), r), Mul(dif(r, tree, difVar), l)), Mul(r, r));
+        }
+        Neg(l):{
+          Neg(dif(l, tree, difVar));
+        }
+        Fra(l, r):{       //Fractal in Parse not used
+          IntConst(0);
+        }
+    }
+}
+
+simplification(e: Expr) -> Expr {
+    switch (e) {
+        Add(l, r): {
+            first = simplification(l);
+            second = simplification(r); 
+            switch (first) {
+                IntConst(c): {
+                    if (c == 0) 
+                          second 
+                    else 
+                      switch (second) {
+                        IntConst(z):  IntConst(c + z);
+                        default:  Add(first, second);
+                      }
+                }
+            
+                default: {
+                    switch (second) {
+                        IntConst(c): {
+                            if (c == 0)
+                               first 
+                            else  Add(first, second)    
+                        }
+                        default: Add(first, second);
+                    }
+                }
+            }
+        }
+        Sub(l,r): {
+            if (l == r)  
+                IntConst(0)
+            else {
+                first = simplification(l);
+                second = simplification(r);
+                if (first == second)  
+                    IntConst(0) 
+                else
+                switch (first) {
+                    IntConst(c): {
+                        switch (second) {
+                            IntConst(z): IntConst(c-z);
+                            default: Sub(first, second);
+                        }
+                    }
+                
+                    default: {
+                        switch (second) {
+                            IntConst(c): {
+                                if (c == 0)  
+                                    first 
+                                else Sub(first, second)   
+                            }
+                            default: Sub(first, second);
+                        }
+                    }
+                }
+            }
+        }
+        Div(l, r): {
+            if (l == r) 
+                IntConst(1)
+            else{
+                first = simplification(l);
+                second = simplification(r);
+                if (first == second)  
+                    IntConst(1)
+                else
+                switch (first) {
+                    IntConst(c): {
+                        if (c == 0)  
+                            IntConst(0)
+                        else {
+                            switch (second) {
+                                IntConst(z): {  
+                                    if (z == 1) 
+                                         first 
+                                    else {
+                                        nod = gcd(c, z);
+                                        Div(IntConst(c / nod), IntConst(z / nod));
+                                    }
+                                }
+                                default: Div(first, second);
+                            }
+                        }
+                    }
+                
+                    default: Div(first, second); 
+                }
+            }
+        }
+        
+        Mul(l,r): {
+            first = simplification(l);
+            second = simplification(r);
+            switch (first) {
+                IntConst(c): {
+                    if (c == 1) 
+                          second
+                    else if (c == 0) 
+                        IntConst(0)
+                    else{
+                        switch(second){
+                            IntConst(z):{
+                                if (z == 1) 
+                                    first
+                                else if (z == 0) 
+                                    IntConst(0)
+                                    else IntConst(c * z);
+                            }
+                            default: Mul(first, second);
+                        }
+                    }
+                }
+                default: Mul(first, second);
+            }
+        }
+        Var(var): Var(var);
+        IntConst(c): IntConst(c);
+        Neg(l): Neg(simplification(l));
+        Fra(l, r): Fra(l, r);       //after dif fractal not used 
+    }
+}
+
+
+main()
+{
+  vars = [Pair("x", Fra(1, 1)), Pair("y", Fra(2,1)), Pair("z", Fra(3,1))];
+  tr =  setTreeValues(TreeEmpty(), vars);
+  sources = [" - z * x * x", "y /x"];
+  expressions:[Expr] = mapi(sources, (\i, value -> Parse(value)));
+  differen = map (expressions, \e->dif(e, tr, "x"));
+  simplified = map(differen, simplification);
+  texts = mapi(simplified,( \i, v -> Print(v)));
+  results = map(simplified, \e -> Number(e, tr));
+  println(sources);
+  println(expressions);
+  println(differen);
+  println(simplified);
+  println(texts);
+  println(results);
+  quit(0);
+}

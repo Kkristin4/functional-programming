@@ -1,0 +1,9 @@
+expr = sum;
+sum = mul:left ws "+" ws sum:right {Add(:left, :right)} | ws mul:left ws "-" ws sum:right {Sub(:left, :right)} | mul;
+mul = neg:left ws "*" ws mul:right {Mul(:left, :right)} | neg:left ws "/" ws mul:right {Div(:left, :right)} | neg;
+neg = ws "-" ws factor:only {Neg(:only)} | factor;
+factor = int | var | "(" sum:only ")" {:only};
+int = ('0' - '9') + $d {IntConst(s2i($d))};
+var = ws char $d ws {Var($d)};
+char = 'a'-'z' | 'A'-'Z';
+ws = (' '|'\r'|'\n'|'\t')*;

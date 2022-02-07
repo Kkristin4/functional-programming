@@ -1,0 +1,48 @@
+import string;
+import ds/tree;/*
+inds(a : [int], m : int) ->[Pair<int, int>] {
+    tr: Tree<int, [int]> = foldi(a, makeTree(), \i, tree, key -> {
+        setTree(tree, key, concat([i], lookupTreeDef(tree, key, [])));
+    });
+    r: [Pair<int, int>] = foldTree(tr, [], \value, index, acc -> if ((lookupTreeDef(tr, m-value, []) == [])|| (value < m - value)){acc}
+    else {
+       if (value > m - value) {concat(acc, foldi(index, [], \k, result, x-> {
+           concat(result, foldi(lookupTreeDef(tr, m-value, []), [], \j, finish, y -> {
+              concat(finish,  [Pair(x, y)])
+           }))
+       }))
+    }
+    else {
+        acc
+    }}
+        );
+    r;
+}*/
+
+inds(a : [int], m : int) ->[Pair<int, int>] {
+    tr: Tree<int, [int]> = foldi(a, makeTree(), \i, tree, key -> {
+        setTree(tree, key, concat([i], lookupTreeDef(tree, key, [])));
+    });
+    r: [Pair<int, int>] = foldTree(tr, [], \value, index, acc -> if ((lookupTreeDef(tr, m-value, []) == [])){acc}
+    else {
+       concat(acc, foldi(index, [], \k, result, x-> {
+           concat(result, foldi(lookupTreeDef(tr, m-value, []), [], \j, finish, y -> {
+               if (x < y){
+              concat(finish,  [Pair(x, y)])}
+              else {finish}
+           }))
+       }))
+    
+    }
+        );
+    r;
+}
+
+
+main()
+{
+a : [int] = [2, 2, 3, 3, 4];
+println(inds(a, 6));
+quit(0);
+}
+
